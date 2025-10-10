@@ -7,6 +7,7 @@ using Asp.netWebAPP.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Asp.netWebAPP.Infrastructure.Data;
 using Asp.netWebAPP.Core.Domain.Value_Objects;
+using Asp.netWebAPP.Core.Shared.Exceptions;
 
 namespace Asp.netWebAPP.Infrastructure.Services
 {
@@ -14,17 +15,18 @@ namespace Asp.netWebAPP.Infrastructure.Services
     {
         private readonly HttpClient _httpClient;
         private readonly AbdmDbContext _dbContext;
-        private readonly AbdmConfigDTO _config;
         private readonly IAbhaAuthService _authService;
-        public AbhaRegistrationService(AbdmDbContext dbContext,
-                                       IAbhaAuthService authService,
-                                       HttpClient httpClient,
+        public AbhaRegistrationService(
+            AbdmDbContext dbContext,
+            IAbhaAuthService authService,
+            HttpClient httpClient,
                                        IAbhaLoginService loginService)
         {
             _httpClient = httpClient;
             _dbContext = dbContext;
             _authService = authService;
         }
+        // Fetches ABDM configuration details from the database
         private async Task<AbdmConfigDTO> GetAbdmConfigAsync()
         {
             var row = await _dbContext.AbdmCore_Parameters
@@ -35,45 +37,67 @@ namespace Asp.netWebAPP.Infrastructure.Services
 
             return JsonSerializer.Deserialize<AbdmConfigDTO>(row.ParameterValue)
                    ?? throw new Exception("Failed to deserialize ABDM config.");
-        }
+        }   
         public async Task<OtpResponse> RequestRegisterOtpAsync(string aadhaarNumber)
         {
-            var config = await GetAbdmConfigAsync();
-            var accessToken = await _authService.GetAccessTokenAsync();
-            string publicKeyResponse = await _authService.GetPublicKeyAsync();
-            string encryptedAadhaar = Encryptor.EncryptWithPublicKeyString(
-                aadhaarNumber, publicKeyResponse);
-
-
-            _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                "Bearer", accessToken);
-            _httpClient.DefaultRequestHeaders.Add("X-CM-ID", "sbx");
-            _httpClient.DefaultRequestHeaders.Add("REQUEST-ID", Guid.NewGuid().ToString());
-            _httpClient.DefaultRequestHeaders.Add("TIMESTAMP", DateTime.UtcNow.ToString("o"));
-
-            var payload = new
+            try
             {
-                txnId = "",
-                scope = new[] { "abha-enrol" },
-                loginHint = "aadhaar",
-                loginId = encryptedAadhaar,
-                otpSystem = "aadhaar"
-            };
-            var response = await _httpClient.PostAsJsonAsync(config.abhaOTPrequestUrl, payload);
-            var json = await response.Content.ReadAsStringAsync();
+                var config = await GetAbdmConfigAsync();
+                var accessToken = await _authService.GetAccessTokenAsync();
+                var publicKey = await _authService.GetPublicKeyAsync();
+                var encryptedAadhaar = Encryptor.EncryptWithPublicKeyString(aadhaarNumber, publicKey);
+                HttpRequestHeaderHelper.ApplyDefaultHeaders(_httpClient, accessToken, true, true);
 
-            if (!response.IsSuccessStatusCode)
-                throw new ApplicationException($"Error sending OTP: {json}");
+                var payload = new
+                {
+                    txnId = "",
+                    scope = new[] { "abha-enrol" },
+                    loginHint = "aadhaar",
+                    loginId = encryptedAadhaar,
+                    otpSystem = "aadhaar"
+                };
+                var response = await _httpClient.PostAsJsonAsync(config.abhaOTPrequestUrl, payload);
+                var json = await response.Content.ReadAsStringAsync();
 
-            return JsonSerializer.Deserialize<OtpResponse>(json);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (json.Contains("\"loginId\":\"Invalid LoginId\""))
+                        throw new InvalidAadhaarException("Invalid Aadhaar number.");
+
+                    if (json.Contains("ABDM-1204"))
+                        throw new TooManyRequest("Too many OTP requests. Please wait and try again.");
+
+                    throw new Exception($"ABDM server error: {json}");
+                }
+
+                var otpResponse = JsonSerializer.Deserialize<OtpResponse>(json);
+                if (otpResponse == null || string.IsNullOrEmpty(otpResponse.txnId))
+                    throw new InvalidAadhaarException("Failed to generate OTP. Please try again.");
+
+                return otpResponse;
+            }
+            catch (InvalidAadhaarException)
+            {
+                throw; 
+            }
+            catch (TooManyRequest)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error in RequestRegisterOtpAsync: {ex.Message}", ex);
+            }
         }
-
-        public async Task<VerifyRegisterOtpResponse> VerifyAbhaRegistrationAsync(string txnId, 
-            string otp, 
-            string mobile)
+        // Verifies OTP for ABHA registration and creates ABHA profile
+        public async Task<VerifyRegisterOtpResponse> VerifyAbhaRegistrationAsync(
+      string txnId,
+      string otp,
+      string mobile)
         {
-            if (string.IsNullOrWhiteSpace(txnId) || string.IsNullOrWhiteSpace(otp) || string.IsNullOrWhiteSpace(mobile))
+            if (string.IsNullOrWhiteSpace(txnId) ||
+                string.IsNullOrWhiteSpace(otp) ||
+                string.IsNullOrWhiteSpace(mobile))
                 throw new ApplicationException("TxnId, OTP, and Mobile are required.");
             var config = await GetAbdmConfigAsync();
             var accessToken = await _authService.GetAccessTokenAsync();
@@ -103,22 +127,27 @@ namespace Asp.netWebAPP.Infrastructure.Services
                 Encoding.UTF8,
                 "application/json"
             );
-            var request = new HttpRequestMessage(HttpMethod.Post, config.abhaCreationUrl)
-            {
-                Content = requestContent
-            };
 
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Headers.Add("X-CM-ID", "sbx");
-            request.Headers.Add("REQUEST-ID", Guid.NewGuid().ToString());
-            request.Headers.Add("TIMESTAMP", DateTime.UtcNow.ToString("o"));
-            var response = await _httpClient.SendAsync(request);
+            HttpRequestHeaderHelper.ApplyDefaultHeaders(
+                _httpClient,
+                accessToken,
+                includeRequestId: true,
+                includeTimestamp: true
+            );
+
+            var response = await _httpClient.PostAsync(config.abhaCreationUrl, requestContent);
             var responseString = await response.Content.ReadAsStringAsync();
 
-            Console.WriteLine("ABHA API Response: " + responseString);
-
             if (!response.IsSuccessStatusCode)
+            {
+                if (responseString.Contains("ABDM-1204"))
+                    throw new InvalidOtpException("Invalid OTP. Please try again.");
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    throw new TooManyRequest("Too many OTP attempts. Please wait and try again.");
+
                 throw new ApplicationException($"ABHA API returned {response.StatusCode}: {responseString}");
+            }
             var result = JsonSerializer.Deserialize<VerifyRegisterOtpResponse>(
                 responseString,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
@@ -131,6 +160,6 @@ namespace Asp.netWebAPP.Infrastructure.Services
 
             return result;
         }
-
+        
     }
 }

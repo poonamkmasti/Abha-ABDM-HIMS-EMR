@@ -10,7 +10,7 @@ patients = signal<PatientSearchDTO[]>([]);
 private apiUrl = ApiConfig.LoginUrl;
 constructor(private http: HttpClient) {}
 
-  async searchPatientByMobile(mobile: string): Promise<PatientSearchDTO[]> {
+  async SearchPatientByMobile(mobile: string): Promise<PatientSearchDTO[]> {
     const body = { mobile };
     const headers = new HttpHeaders({ 'Content-Type': 'application/json' });
 

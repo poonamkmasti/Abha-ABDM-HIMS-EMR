@@ -8,6 +8,6 @@ export class SearchPatientHandler {
   constructor(private apiService: PatientApiService) {}
 
   async execute(query: SearchPatientQuery) {
-    return this.apiService.searchPatientByMobile(query.mobile);
+    return this.apiService.SearchPatientByMobile(query.mobile);
   }
 }
