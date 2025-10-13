@@ -3,5 +3,6 @@
     public class OtpResponse
     {
         public string txnId { get; set; }
+        public string? errorJson { get; set; }
     }
 }

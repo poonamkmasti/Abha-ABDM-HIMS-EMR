@@ -44,12 +44,8 @@ ngOnInit(): void {
       mobile: ['', [Validators.required, Validators.pattern(/^\d{10}$/)]],
     });
   }
-toggleCreateAbhaBox() {
-    this.ShowCreateAbha.set(!this.ShowCreateAbha());
-  }
-
- async RequestOtp(): Promise<void> {
-  const aadhaar = this.abhaForm.get('aadhar')?.value; 
+async RequestOtp(): Promise<void> {
+  const aadhaar = this.abhaForm.get('aadhar')?.value;
 
   if (!aadhaar || aadhaar.length !== 12) {
     this.toastr.error('Enter a valid 12-digit Aadhaar number');
@@ -60,69 +56,56 @@ toggleCreateAbhaBox() {
   try {
     const command = new RequestRegistationOtpCommand(aadhaar);
     const res = await this.requestOtpHandler.execute(command);
-
-    if (!res || !res.txnId) {
-      this.toastr.error('OTP request failed. Please try again.');
-      return;
+    if (res && res.txnId) {
+      this.TxnId.set(res.txnId);
+      this.CreateStep.set(2);
+      this.toastr.success('OTP sent successfully');
     }
-    this.TxnId.set(res.txnId);
-    this.CreateStep.set(2);
-    this.toastr.success('OTP sent successfully');
-  } catch (err) {
-    console.error('Error in RequestOtp:', err);
-    this.toastr.error('Something went wrong. Please try again.');
   } finally {
     this.Loading.set(false);
   }
- }
+}
 
- async VerifyAadharOtp(): Promise<void> {
-   const aadhaar = this.abhaForm.get('aadhar')?.value;
-   const otp = this.abhaForm.get('otp')?.value;
-   const mobile = this.abhaForm.get('mobile')?.value;
+async VerifyAadharOtp(): Promise<void> {
+  const aadhaar = this.abhaForm.get('aadhar')?.value;
+  const otp = this.abhaForm.get('otp')?.value;
+  const mobile = this.abhaForm.get('mobile')?.value;
 
-   if (!aadhaar || aadhaar.length !== 12) {
+  if (!aadhaar || aadhaar.length !== 12) {
     this.toastr.error('Enter a valid 12-digit Aadhaar number');
     return;
-   }
-   if (!otp || otp.length !== 6) {
+  }
+  if (!otp || otp.length !== 6) {
     this.toastr.error('Enter a valid 6-digit OTP');
     return;
-   }
-   if (!mobile || mobile.length !== 10) {
+  }
+  if (!mobile || mobile.length !== 10) {
     this.toastr.error('Enter a valid 10-digit mobile number');
     return;
-   }
-   this.Loading.set(true);
-   try {
-    const command = new VerifyRegistrationOtpCommand(
-      this.TxnId(), 
-      otp,
-      mobile
-    );
-   const res = await this.verifyOtpHandler.execute(command);
-   if (!res) {
-   this.toastr.error('OTP verification failed. Please try again.');
-   return;
+  }
+  this.Loading.set(true);
+  const command = new VerifyRegistrationOtpCommand(this.TxnId(), otp, mobile);
+  try {
+    const res = await this.verifyOtpHandler.execute(command);
+    if (!res) {
+      this.toastr.error('OTP verification failed. Please try again.');
+      return;
     }
     this.VerifiedAbha = {
-    AbhaNumber: res.abhaProfile?.abhaNumber || res.abhaProfile?.preferredAddress?.split('@')[0] || '',
-    AbhaAddress: res.abhaProfile?.preferredAddress || '',
-    Name: `${res.abhaProfile?.firstName || ''} ${res.abhaProfile?.middleName || ''} ${res.abhaProfile?.lastName || ''}`.trim(),
-    mobile:res.abhaProfile?.mobile,
-    message: res.message
+      AbhaNumber: res.abhaProfile?.abhaNumber || res.abhaProfile?.preferredAddress?.split('@')[0] || '',
+      AbhaAddress: res.abhaProfile?.preferredAddress || '',
+      Name: `${res.abhaProfile?.firstName || ''} ${res.abhaProfile?.middleName || ''} ${res.abhaProfile?.lastName || ''}`.trim(),
+      mobile: res.abhaProfile?.mobile,
+      message: res.message
     };
     if (res.message) {
-    this.toastr.info(res.message);
+      this.toastr.info(res.message);
     }
     this.CreateStep.set(3);
-   } catch (err) {
-    console.error('Error verifying registration OTP:', err);
-    this.toastr.error('Something went wrong. Please try again.');
-   } finally {
+  } finally {
     this.Loading.set(false);
-   }
- }
+  }
+}
 
 
 }

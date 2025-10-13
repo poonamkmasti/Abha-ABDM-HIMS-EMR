@@ -51,11 +51,12 @@ builder.Services.AddScoped<RegisterBridgeServiceHandler>();
 // Enable CORS for Angular dev server
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularDev", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .AllowAnyOrigin()     
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -73,7 +74,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 // Apply CORS
-app.UseCors("AllowAngularDev");
+app.UseCors("AllowAll");
 
 app.UseAuthorization();
 

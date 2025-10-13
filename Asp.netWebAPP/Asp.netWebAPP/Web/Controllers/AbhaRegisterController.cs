@@ -2,6 +2,7 @@
 using Asp.netWebAPP.Core.Application.ABHA.Commands.Handlers;
 using Asp.netWebAPP.Core.Application.ABHA.Queries.Handler;
 using Asp.netWebAPP.Core.Application.DTO_s;
+using Asp.netWebAPP.Core.Shared.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asp.netWebAPP.Web.Controllers
@@ -25,20 +26,32 @@ namespace Asp.netWebAPP.Web.Controllers
         [HttpPost("request-otp-register")]
         public async Task<ActionResult<OtpResponse>> RequestOtpRegister([FromBody] RequestRegisterOtpCommand command)
         {
+            if (string.IsNullOrEmpty(command.AadhaarNumber))
+                return BadRequest(new { message = "Aadhaar number is required." });
+
             try
             {
-                if (string.IsNullOrEmpty(command.AadhaarNumber))
-                    return BadRequest(new { Message = "Aadhaar number is required." });
-
                 var result = await _requestRegisterOtpHandler.Handle(command);
                 return Ok(result);
+            }
+            catch (InvalidAadhaarException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (TooManyRequest ex)
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests, new { message = ex.Message });
+            }
+            catch (AbdmConfigMissingException ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
             }
             catch (Exception ex)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An unexpected error occurred.",
-                    Details = ex.Message
+                    message = "An unexpected error occurred.",
+                    details = ex.Message
                 });
             }
         }
@@ -49,18 +62,26 @@ namespace Asp.netWebAPP.Web.Controllers
             try
             {
                 if (string.IsNullOrEmpty(command.TxnId) || string.IsNullOrEmpty(command.Otp) || string.IsNullOrEmpty(command.Mobile))
-                    return BadRequest(new { Message = "TxnId, OTP, and Mobile are required." });
+                    return BadRequest(new { message = "TxnId, OTP, and Mobile are required." });
 
                 var result = await _verifyRegisterOtpHandler.Handle(command);
                 return Ok(result);
             }
+            catch (InvalidOtpException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (AbdmConfigMissingException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (TooManyRequest ex)
+            {
+                return StatusCode(429, new { message = ex.Message });
+            }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    Message = "An unexpected error occurred.",
-                    Details = ex.Message
-                });
+                return StatusCode(500, new { message = "An unexpected error occurred.", details = ex.Message });
             }
         }
     }

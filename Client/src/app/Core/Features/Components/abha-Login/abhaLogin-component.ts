@@ -60,7 +60,7 @@ export class ABHA {
     this.verifyHandler = new VerifyOtpHandler(apiService);
     this.searchPatientHandler = new SearchPatientHandler(patientService);
   }
-  OnMobileInput(value: string) {
+OnMobileInput(value: string) {
   this.loginForm.get('mobile')?.setValue(value);
 
   if (value.length !== 10) {
@@ -72,8 +72,14 @@ export class ABHA {
     this.ShowCreateAbha.set(false);
   }
 }
+OnSelectPatient(pat: any) {
+  this.SelectedPatient.set(pat);
+  setTimeout(() => {
+  window.location.href = "http://localhost:56326/Home/Index#/Appointment/Visit";
+}, 200); 
 
-  OnCreateAbhaClick() {
+}
+OnCreateAbhaClick() {
   this.ShowCreateAbha.set(true);   
   this.Step.set(1);                
   this.NoAbhaFound.set(false);     
@@ -87,56 +93,43 @@ async RequestOtp(): Promise<void> {
 
   this.Loading.set(true);
 
+  this.AbhaSearched.set(true);
+  this.NoAbhaFound.set(false);
+  this.AbhaAccounts.set([]);
+  this.Patients.set([]);
+
+  const mobile = this.loginForm.get('mobile')!.value;
   try {
-    this.AbhaSearched.set(true);
-    this.NoAbhaFound.set(false);
-    this.AbhaAccounts.set([]);
-    this.Patients.set([]);
-
-    const mobile = this.loginForm.get('mobile')!.value;
     const searchResult = await this.searchHandler.execute(new SearchAbhaAccountQuery(mobile));
-
-    if (!searchResult || searchResult.length === 0) {
-      this.NoAbhaFound.set(true);
-      this.Step.set(2);                         
-      this.toastr.info('No ABHA account found for this mobile number.');
-      await this.SearchPatientInDanphe(mobile); 
-      return; 
-    }
-
-    const firstEntry = searchResult[0];
-    if (!firstEntry.abha || firstEntry.abha.length === 0) {
+    if (!searchResult || searchResult.length === 0 || !searchResult[0].abha || searchResult[0].abha.length === 0) {
       this.NoAbhaFound.set(true);
       this.Step.set(2);
-      this.toastr.info('No ABHA entries found for this mobile number.');
       await this.SearchPatientInDanphe(mobile);
       return;
     }
 
     this.NoAbhaFound.set(false);
-    const accountIndex = firstEntry.abha[0].index;
+    const accountIndex = searchResult[0].abha[0].index;
     const otpResponse = await this.otpHandler.execute(
-      new RequestOtpCommand(accountIndex, firstEntry.txnId)
+      new RequestOtpCommand(accountIndex, searchResult[0].txnId)
     );
 
     if (!otpResponse || !otpResponse.txnId) {
-      this.toastr.error('OTP request failed. Please try again.');
       return;
     }
 
     this.TxnId.set(otpResponse.txnId);
-    this.Step.set(2);               
+    this.Step.set(2);
     this.toastr.success('OTP sent successfully');
 
   } catch (error) {
-    console.error("Error in RequestOtp:", error);
-    this.toastr.error('Something went wrong. Please try again.');
+    console.error('RequestOtp failed:', error);
   } finally {
-    this.Loading.set(false); 
+    this.Loading.set(false);
   }
 }
 
-  async VerifyOtp(): Promise<void> {
+async VerifyOtp(): Promise<void> {
   if (this.loginForm.get('otp')?.invalid) {
     this.toastr.error('Enter a valid 6-digit OTP');
     return;
@@ -152,17 +145,16 @@ async RequestOtp(): Promise<void> {
 
     if (res && res.accounts) {
       this.AbhaAccounts.set(res.accounts);
-      this.NoAbhaFound.set(false);  
-      this.Step.set(3);             
+      this.NoAbhaFound.set(false);
+      this.Step.set(3);
       this.toastr.success('OTP verified successfully');
-     
+
       await this.SearchPatientInDanphe(this.loginForm.get('mobile')!.value);
     }
   } catch (err) {
     console.error('OTP verification failed:', err);
-    this.toastr.error('OTP verification failed. Please try again.');
   } finally {
-    this.Loading.set(false); 
+    this.Loading.set(false);
   }
 }
 
@@ -175,20 +167,18 @@ async SearchPatientInDanphe(mobile: string): Promise<void> {
       new SearchPatientQuery(mobile)
     );
     console.log('Patient results from Danphe:', patientResults);
+    const flatPatients = (patientResults || []).flat();
 
-    if (!patientResults || patientResults.length === 0) {
-      this.toastr.info("No matching patient found in Danphe");
+    if (!flatPatients || flatPatients.length === 0) {
       this.Patients.set([]);
       return;
     }
 
-    const flatPatients = patientResults.flat();
     this.Patients.set(flatPatients);
     console.log('Patients signal:', this.Patients());
     this.toastr.success("Patients loaded successfully.");
   } catch (error) {
     console.error("Error searching patient in Danphe:", error);
-    this.toastr.error("Failed to search patient in Danphe");
     this.Patients.set([]);
   } finally {
     this.Loading.set(false);
