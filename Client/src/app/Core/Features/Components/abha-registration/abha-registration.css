@@ -153,3 +153,30 @@ button:disabled {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+.consent-container {
+  margin-top: 10px;
+}
+
+.consent-text {
+  max-height: 120px;          
+  overflow-y: auto;            
+  border: 1px solid #ccc;
+  padding: 8px;
+  font-size: 14px;
+  background-color: #f9f9f9;
+  margin-bottom: 5px;
+  white-space: normal;         
+}
+.consent-checkbox {
+  display: flex;
+  align-items: center;    
+  gap: 5px;               
+  font-size: 14px;
+  cursor: pointer;        
+}
+
+.consent-checkbox input[type="checkbox"] {
+  margin: 0;             
+  width: 16px;
+  height: 16px;
+}

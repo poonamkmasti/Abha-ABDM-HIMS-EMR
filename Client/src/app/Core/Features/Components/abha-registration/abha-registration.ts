@@ -28,6 +28,7 @@ export class AbhaRegistration {
   Loading = signal(false);
   TxnId = signal('');
   Aadhaar = signal('');
+  ConsentGiven: boolean = false;
   VerifiedAbha: VerifyRegistrationOtpResponse | null = null;
   private requestOtpHandler: RequestRegistrationOtpHandler;
   private verifyOtpHandler: VerifyRegistrationOtpHandler;
