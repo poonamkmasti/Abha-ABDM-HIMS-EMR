@@ -1,4 +1,5 @@
 ﻿using Asp.netWebAPP.Core.Application.DTO_s;
+using Asp.netWebAPP.Core.Application.Exceptions;
 using Asp.netWebAPP.Core.Application.Interface;
 using Asp.netWebAPP.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
@@ -16,7 +17,7 @@ namespace Asp.netWebAPP.Infrastructure.Services
         private readonly IAbhaAuthService _authService;
         private readonly DanpheDbContext _danpheDbContext;
         private readonly IDataProtectionProvider _dataProtectionProvider;
-        private readonly ILogger<CareContextLinkService> _logger; 
+        private readonly ILogger<CareContextLinkService> _logger;
 
         public CareContextLinkService(
             HttpClient httpClient,
@@ -34,171 +35,132 @@ namespace Asp.netWebAPP.Infrastructure.Services
             _logger = logger;
         }
 
-        /// <summary>
-        /// Links care context for a given patient ABHA number.
-        /// Generates or reuses a valid Link Token and calls ABDM API.
-        /// </summary>
-        /// <param name="request">Request containing ABHA details</param>
-        /// <returns>CareContextLinkResponseDTO with status and message</returns>
         public async Task<CareContextLinkResponseDTO> LinkCareContextAsync(CareContextLinkRequestDTO request)
         {
-            try
+            var config = await _authService.GetAbdmConfigAsync();
+            var accessToken = await _authService.GetAccessTokenAsync();
+
+            var existingPatient = await _danpheDbContext.Patient
+                .FirstOrDefaultAsync(p => p.EHRNumber == request.AbhaNumber);
+
+            if (existingPatient == null)
+                throw new NotFoundException("Patient not found with provided ABHA Number.");
+
+            string fullName = string.Join(" ",
+                new[] { existingPatient.FirstName, existingPatient.MiddleName, existingPatient.LastName }
+                .Where(n => !string.IsNullOrWhiteSpace(n)));
+
+            string genderShort = existingPatient.Gender?.Trim().ToLower() switch
             {
-                var config = await _authService.GetAbdmConfigAsync();
-                var accessToken = await _authService.GetAccessTokenAsync();
+                "male" => "M",
+                "female" => "F",
+                _ => "U"
+            };
 
-                //  STEP 1: Fetch patient
-                var existingPatient = await _danpheDbContext.Patient
-                    .FirstOrDefaultAsync(p => p.EHRNumber == request.AbhaNumber);
+            string yearOfBirth = existingPatient.DateOfBirth.Year.ToString();
 
-                if (existingPatient == null)
-                    throw new InvalidOperationException("Patient not found with provided ABHA Number.");
+            var protector = _dataProtectionProvider.CreateProtector("LinkToken");
 
-                // Construct patient details
-                string fullName = string.Join(" ",
-                    new[] { existingPatient.FirstName, existingPatient.MiddleName, existingPatient.LastName }
-                    .Where(n => !string.IsNullOrWhiteSpace(n)));
+            string linkToken;
 
-                string genderShort = existingPatient.Gender?.Trim().ToLower() switch
+            if (!string.IsNullOrWhiteSpace(existingPatient.EncryptedLinkToken) &&
+                existingPatient.LinkTokenExpiry.HasValue &&
+                existingPatient.LinkTokenExpiry.Value > DateTime.UtcNow)
+            {
+                linkToken = protector.Unprotect(existingPatient.EncryptedLinkToken);
+            }
+            else
+            {
+                var generateRequest = new GenerateLinkTokenRequestDTO
                 {
-                    "male" => "M",
-                    "female" => "F",
-                    _ => "U"
+                    AbhaNumber = request.AbhaNumber,
+                    AbhaAddress = request.AbhaAddress,
+                    Name = fullName,
+                    Gender = genderShort,
+                    YearOfBirth = yearOfBirth
                 };
 
-                string yearOfBirth = existingPatient.DateOfBirth.Year.ToString();
-                var protector = _dataProtectionProvider.CreateProtector("LinkToken");
+                var newTokenResponse = await GenerateLinkTokenAsync(generateRequest);
 
-                string linkToken;
+                if (newTokenResponse.Status != "Generated")
+                    throw new ExternalServiceException("Failed to generate new Link Token from ABDM API.");
 
-                //  STEP 2: Use existing token if valid, else generate new one
-                if (!string.IsNullOrWhiteSpace(existingPatient.EncryptedLinkToken) &&
-                    existingPatient.LinkTokenExpiry.HasValue &&
-                    existingPatient.LinkTokenExpiry.Value > DateTime.UtcNow)
-                {
-                    linkToken = protector.Unprotect(existingPatient.EncryptedLinkToken);
-                }
-                else
-                {
-                    var generateRequest = new GenerateLinkTokenRequestDTO
-                    {
-                        AbhaNumber = request.AbhaNumber,
-                        AbhaAddress = request.AbhaAddress,
-                        Name = fullName,
-                        Gender = genderShort,
-                        YearOfBirth = yearOfBirth
-                    };
+                linkToken = newTokenResponse.LinkToken;
 
-                    var newTokenResponse = await GenerateLinkTokenAsync(generateRequest);
+                //existingPatient.EncryptedLinkToken = protector.Protect(linkToken);
+                //existingPatient.LinkTokenExpiry = DateTime.UtcNow.AddMonths(6);
+                // Prefer CreatedOn if available, else use current UTC time
+                existingPatient.LinkTokenExpiry = (existingPatient.CreatedOn.HasValue)
+     ? existingPatient.CreatedOn.Value.AddMonths(6)
+     : DateTime.UtcNow.AddMonths(6);
 
-                    if (newTokenResponse.Status != "Generated")
-                        throw new Exception("Failed to generate new Link Token from ABDM API.");
 
-                    linkToken = newTokenResponse.LinkToken;
 
-                    // Encrypt and save new token
-                    existingPatient.EncryptedLinkToken = protector.Protect(linkToken);
-                    existingPatient.LinkTokenExpiry = DateTime.UtcNow.AddMonths(6);
-
-                    _danpheDbContext.Patient.Update(existingPatient);
-                    await _danpheDbContext.SaveChangesAsync();
-                }
-
-                //  STEP 3: Call ABDM Care Context Link API
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, config.careContextLinkUrl)
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
-                };
-                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                httpRequest.Headers.Add("REQUEST-ID", Guid.NewGuid().ToString());
-                httpRequest.Headers.Add("TIMESTAMP", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
-                httpRequest.Headers.Add("X-CM-ID", "sbx");
-                httpRequest.Headers.Add("X-HIP-ID", config.hipId);
-                httpRequest.Headers.Add("X-LINK-TOKEN", linkToken);
-
-                var response = await _httpClient.SendAsync(httpRequest);
-                var content = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError("Care Context Link API failed. Status: {StatusCode}, Content: {Content}",
-                        response.StatusCode, content);
-                }
-
-                return new CareContextLinkResponseDTO
-                {
-                    TransactionId = Guid.NewGuid().ToString(),
-                    Status = response.IsSuccessStatusCode ? "Success" : "Failed",
-                    Message = content
-                };
+                _danpheDbContext.Patient.Update(existingPatient);
+                await _danpheDbContext.SaveChangesAsync();
             }
-            catch (HttpRequestException httpEx)
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, config.careContextLinkUrl)
             {
-                _logger.LogError(httpEx, "HTTP error while linking care context.");
-                throw new Exception("Error while calling ABDM service. Please try again later.", httpEx);
-            }
-            catch (InvalidOperationException invEx)
+                Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
+            };
+
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            httpRequest.Headers.Add("REQUEST-ID", Guid.NewGuid().ToString());
+            httpRequest.Headers.Add("TIMESTAMP", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+            httpRequest.Headers.Add("X-CM-ID", "sbx");
+            httpRequest.Headers.Add("X-HIP-ID", config.hipId);
+            httpRequest.Headers.Add("X-LINK-TOKEN", linkToken);
+
+            var response = await _httpClient.SendAsync(httpRequest);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning(invEx, "Invalid operation during LinkCareContextAsync.");
-                throw;
+                _logger.LogError("Care Context Link API failed. Status: {StatusCode}, Content: {Content}",
+                    response.StatusCode, content);
+                throw new ExternalServiceException($"ABDM API returned {response.StatusCode}: {content}");
             }
-            catch (Exception ex)
+
+            return new CareContextLinkResponseDTO
             {
-                _logger.LogError(ex, "Unexpected error in LinkCareContextAsync.");
-                throw new Exception("An unexpected error occurred while linking care context.", ex);
-            }
+                TransactionId = Guid.NewGuid().ToString(),
+                Status = "Success",
+                Message = "Care context linked successfully."
+            };
         }
 
-        /// <summary>
-        /// Generates a new link token using ABDM API.
-        /// </summary>
         private async Task<GenerateLinkTokenResponseDTO> GenerateLinkTokenAsync(GenerateLinkTokenRequestDTO request)
         {
-            try
+            var config = await _authService.GetAbdmConfigAsync();
+            var token = await _authService.GetAccessTokenAsync();
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, config.generateLinkTokenUrl)
             {
-                var config = await _authService.GetAbdmConfigAsync();
-                var token = await _authService.GetAccessTokenAsync();
+                Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
+            };
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            httpRequest.Headers.Add("REQUEST-ID", Guid.NewGuid().ToString());
+            httpRequest.Headers.Add("TIMESTAMP", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+            httpRequest.Headers.Add("X-CM-ID", "sbx");
+            httpRequest.Headers.Add("X-HIP-ID", config.hipId);
 
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, config.generateLinkTokenUrl)
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
-                };
-                httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                httpRequest.Headers.Add("REQUEST-ID", Guid.NewGuid().ToString());
-                httpRequest.Headers.Add("TIMESTAMP", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
-                httpRequest.Headers.Add("X-CM-ID", "sbx");
-                httpRequest.Headers.Add("X-HIP-ID", config.hipId);
+            var response = await _httpClient.SendAsync(httpRequest);
+            var content = await response.Content.ReadAsStringAsync();
 
-                var response = await _httpClient.SendAsync(httpRequest);
-                var content = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError("Generate Link Token API failed. Status: {StatusCode}, Response: {Content}",
-                        response.StatusCode, content);
-                    return new GenerateLinkTokenResponseDTO
-                    {
-                        Status = "Failed",
-                    };
-                }
-
-                return new GenerateLinkTokenResponseDTO
-                {
-                    LinkToken = "Extract_from_response_JSON",
-                    Expiry = DateTime.UtcNow.AddMonths(6),
-                    Status = "Generated"
-                };
-            }
-            catch (HttpRequestException httpEx)
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError(httpEx, "HTTP error while generating Link Token.");
-                throw new Exception("Network error occurred while generating link token.", httpEx);
+                _logger.LogError("Generate Link Token API failed. Status: {StatusCode}, Response: {Content}",
+                    response.StatusCode, content);
+                throw new ExternalServiceException($"ABDM token API error: {response.StatusCode}");
             }
-            catch (Exception ex)
+
+            return new GenerateLinkTokenResponseDTO
             {
-                _logger.LogError(ex, "Unexpected error in GenerateLinkTokenAsync.");
-                throw new Exception("An unexpected error occurred while generating link token.", ex);
-            }
+                LinkToken = "Extract_from_response_JSON",
+                Expiry = DateTime.UtcNow.AddMonths(6),
+                Status = "Generated"
+            };
         }
     }
 }

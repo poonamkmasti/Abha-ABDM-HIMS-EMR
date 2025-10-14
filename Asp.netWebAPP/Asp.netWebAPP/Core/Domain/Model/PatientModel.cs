@@ -18,6 +18,7 @@ namespace Asp.netWebAPP.Core.Domain.Model
         public DateTime DateOfBirth { get; set; }
         public string? EncryptedLinkToken { get; set; }  
         public DateTime? LinkTokenExpiry { get; set; } 
+        public DateTime? CreatedOn { get; set; }
 
     }
 }
