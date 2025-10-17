@@ -1,9 +1,12 @@
+using ABDM.FHIR.Services;
 using Asp.netWebAPP.Core.Application.ABHA.Commands.Handlers;
 using Asp.netWebAPP.Core.Application.ABHA.Queries.Handler;
 using Asp.netWebAPP.Core.Application.Interface;
 using Asp.netWebAPP.Core.Application.M2.Handlers;
 using Asp.netWebAPP.Infrastructure.Data;
+using Asp.netWebAPP.Infrastructure.Data.FHIR_Linq;
 using Asp.netWebAPP.Infrastructure.Services;
+//using Asp.netWebAPP.Infrastructure.Services.FHIR_Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
@@ -35,6 +38,10 @@ builder.Services.AddScoped<IAbhaRegistrationService,AbhaRegistrationService>();
 builder.Services.AddScoped<IAbhaAuthService,AbhaAuthService>();
 builder.Services.AddScoped<IBridgeService, BridgeService>();
 builder.Services.AddScoped<ICareContextLinkService, CareContextLinkService>();
+//FHIR
+builder.Services.AddSingleton<ResourcePopulatorService>();
+builder.Services.AddScoped<FhirPrescriptionService>();
+builder.Services.AddScoped<FhirPrescriptionQueries>();
 
 
 

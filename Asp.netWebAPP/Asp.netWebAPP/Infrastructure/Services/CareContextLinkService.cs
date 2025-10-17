@@ -1,5 +1,5 @@
 ﻿using Asp.netWebAPP.Core.Application.DTO_s;
-using Asp.netWebAPP.Core.Application.Exceptions;
+//using Asp.netWebAPP.Core.Application.Exceptions;
 using Asp.netWebAPP.Core.Application.Interface;
 using Asp.netWebAPP.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
@@ -43,8 +43,8 @@ namespace Asp.netWebAPP.Infrastructure.Services
             var existingPatient = await _danpheDbContext.Patient
                 .FirstOrDefaultAsync(p => p.EHRNumber == request.AbhaNumber);
 
-            if (existingPatient == null)
-                throw new NotFoundException("Patient not found with provided ABHA Number.");
+            //if (existingPatient == null)
+            //    throw new NotFoundException("Patient not found with provided ABHA Number.");
 
             string fullName = string.Join(" ",
                 new[] { existingPatient.FirstName, existingPatient.MiddleName, existingPatient.LastName }
@@ -82,8 +82,8 @@ namespace Asp.netWebAPP.Infrastructure.Services
 
                 var newTokenResponse = await GenerateLinkTokenAsync(generateRequest);
 
-                if (newTokenResponse.Status != "Generated")
-                    throw new ExternalServiceException("Failed to generate new Link Token from ABDM API.");
+                //if (newTokenResponse.Status != "Generated")
+                //    throw new ExternalServiceException("Failed to generate new Link Token from ABDM API.");
 
                 linkToken = newTokenResponse.LinkToken;
 
@@ -119,7 +119,7 @@ namespace Asp.netWebAPP.Infrastructure.Services
             {
                 _logger.LogError("Care Context Link API failed. Status: {StatusCode}, Content: {Content}",
                     response.StatusCode, content);
-                throw new ExternalServiceException($"ABDM API returned {response.StatusCode}: {content}");
+               // throw new ExternalServiceException($"ABDM API returned {response.StatusCode}: {content}");
             }
 
             return new CareContextLinkResponseDTO
@@ -152,7 +152,7 @@ namespace Asp.netWebAPP.Infrastructure.Services
             {
                 _logger.LogError("Generate Link Token API failed. Status: {StatusCode}, Response: {Content}",
                     response.StatusCode, content);
-                throw new ExternalServiceException($"ABDM token API error: {response.StatusCode}");
+                //throw new ExternalServiceException($"ABDM token API error: {response.StatusCode}");
             }
 
             return new GenerateLinkTokenResponseDTO
