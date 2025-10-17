@@ -86,7 +86,8 @@ OnMobileInput(value: string) {
 OnSelectPatient(pat: any) {
   this.SelectedPatient.set(pat);
   setTimeout(() => {
-  window.location.href = "http://localhost:56326/Home/Index#/Appointment/Visit";
+window.location.href = "http://localhost:56326/Home/Index?redirectTo=Appointment/Visit";
+
 }, 200); 
 
 }

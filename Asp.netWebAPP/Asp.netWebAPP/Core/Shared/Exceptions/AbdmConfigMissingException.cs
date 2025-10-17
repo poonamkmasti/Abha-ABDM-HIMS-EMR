@@ -24,4 +24,8 @@
     {
         public AbdmException(string message) : base(message) { }
     }
+    public class MultipleOTPRequest: Exception
+    {
+        public MultipleOTPRequest(string message) : base(message) { }
+    }
 }

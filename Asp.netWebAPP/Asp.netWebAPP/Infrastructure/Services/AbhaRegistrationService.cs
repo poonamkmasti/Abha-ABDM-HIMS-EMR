@@ -66,6 +66,8 @@ namespace Asp.netWebAPP.Infrastructure.Services
 
                     if (json.Contains("ABDM-1204"))
                         throw new TooManyRequest("Too many OTP requests. Please wait and try again.");
+                    if (json.Contains("ABDM-1100"))
+                        throw new TooManyRequest("You have requested multiple OTPs Or Exc.");
 
                     throw new Exception($"ABDM server error: {json}");
                 }

@@ -102,6 +102,24 @@ async VerifyAadharOtp(): Promise<void> {
     if (res.message) {
       this.toastr.info(res.message);
     }
+
+const danpheWindow = window.open('http://localhost:56326/Home/Index', '_blank');
+
+setTimeout(() => {
+  danpheWindow!.location.href = 'http://localhost:56326/Home/Index#/Appointment/Visit';
+}, 1000);
+
+setTimeout(() => {
+  const abhaData = {
+    abhaNumber: res.abhaProfile?.abhaNumber || '',
+    abhaAddress: res.abhaProfile?.preferredAddress || '',
+    firstName: res.abhaProfile?.firstName || '',
+    middleName: res.abhaProfile?.middleName || '',
+    lastName: res.abhaProfile?.lastName || '',
+    mobile: res.abhaProfile?.mobile || ''
+  };
+  danpheWindow?.postMessage(abhaData, 'http://localhost:56326');
+}, 2000);
     this.CreateStep.set(3);
   } finally {
     this.Loading.set(false);
