@@ -6,9 +6,16 @@ using Asp.netWebAPP.Infrastructure.Data;
 using Asp.netWebAPP.Infrastructure.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()); 
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -18,15 +25,21 @@ builder.Services.AddMediatR(cfg =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddDataProtection();
+
 // Database contexts
+
 builder.Services.AddDbContext<AbdmDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-//builder.Services.AddDbContext<DanpheDbContext>(options =>
-//    options.UseSqlServer(builder.Configuration.GetConnectionString("DanpheDb")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("AbdmConfigDb")));
+builder.Services.AddDbContext<AbdmAzureDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("AbdmAzureDb")));
+
+
 builder.Services.AddDbContext<DanpheDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DanpheDb"))
-           .EnableSensitiveDataLogging()
-           .LogTo(Console.WriteLine, LogLevel.Information));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DanpheDb")));
+           //.EnableSensitiveDataLogging()
+           //.LogTo(Console.WriteLine, LogLevel.Information));
+
+
 
 
 // Services

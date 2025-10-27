@@ -2,9 +2,9 @@
 {
     public class GenerateLinkTokenResponseDTO
     {
-        public string LinkToken { get; set; }
-        public DateTime Expiry { get; set; }
-        public string Status { get; set; }
+        //public string LinkToken { get; set; }
+        //public DateTime Expiry { get; set; }
+        public bool Status { get; set; }
 
     }
 }

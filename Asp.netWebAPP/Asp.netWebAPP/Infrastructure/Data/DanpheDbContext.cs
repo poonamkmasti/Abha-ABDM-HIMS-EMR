@@ -11,8 +11,9 @@ namespace Asp.netWebAPP.Infrastructure.Data
              public DbSet<PatientModel> Patient { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Map PatientModel to the real table name in DB
-            modelBuilder.Entity<PatientModel>().ToTable("PAT_Patient");
+            modelBuilder.Entity<PatientModel>()
+            .ToTable("PAT_Patient", t => t.HasTrigger("TRG_PAT_History_PatientName"));
+
 
             base.OnModelCreating(modelBuilder);
         }

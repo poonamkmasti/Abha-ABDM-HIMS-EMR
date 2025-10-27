@@ -27,30 +27,6 @@ namespace Asp.netWebAPP.Web.Controllers
             var result = await _mediator.Send(new LinkCareContextCommand  { Request = request });
             return Ok(result);
         }
-        [HttpGet("check-db")]
-        public async Task<IActionResult> CheckDatabaseConnection()
-        {
-            try
-            {
-                bool canConnect = await _DanpheDbContext.Database.CanConnectAsync();
-                int patientCount = await _DanpheDbContext.Patient.CountAsync();
-                return Ok(new
-                {
-                    CanConnect = canConnect,
-                    TotalPatients = patientCount
-                });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Error = ex.Message, StackTrace = ex.StackTrace });
-            }
-        }
 
-        //[HttpPost("generate-link-token")]
-        //public async Task<IActionResult> GenerateLinkToken([FromBody] GenerateLinkTokenRequestDTO request)
-        //{
-        //    var result = await _mediator.Send(new GenerateLinkTokenCommand { Request = request });
-        //    return Ok(result);
-        //}
     }
 }

@@ -16,6 +16,9 @@ node_modules/
 
 # Logs
 *.log
+*.Migrations
+Asp.netWebAPP/Migrations/
+Asp.netWebAPP/Logs/
 
 # IIS Express
 IISExpress/
@@ -25,3 +28,4 @@ IISExpress/
 
 # Misc
 *.DS_Store
+

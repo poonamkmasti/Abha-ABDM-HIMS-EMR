@@ -2,11 +2,11 @@
 {
     public class GenerateLinkTokenRequestDTO
     {
-        public string AbhaNumber { get; set; }
-        public string AbhaAddress { get; set; }
-        public string Name { get; set; }
-        public string Gender { get; set; }
-        public string YearOfBirth { get; set; }
+        public string abhaNumber { get; set; }
+        public string abhaAddress { get; set; }
+        public string name { get; set; }
+        public string gender { get; set; }
+        public string yearOfBirth { get; set; }
 
     }
 }

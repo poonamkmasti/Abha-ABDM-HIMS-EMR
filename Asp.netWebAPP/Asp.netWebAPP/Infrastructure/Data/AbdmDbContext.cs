@@ -7,9 +7,16 @@ namespace Asp.netWebAPP.Infrastructure.Data
   
     public class AbdmDbContext : DbContext
     {
-        public AbdmDbContext(DbContextOptions<AbdmDbContext> options) : base(options) { }
+        public AbdmDbContext(DbContextOptions<AbdmDbContext> options) : base(options) {
+           
+        }
 
         public DbSet<AbdmCoreParameters> AbdmCore_Parameters { get; set; }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AbdmCoreParameters>()
+                .ToTable("AbdmCore_Parameters");
+        }
     }
 }
