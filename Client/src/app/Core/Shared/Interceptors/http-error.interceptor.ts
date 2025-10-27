@@ -19,6 +19,11 @@ export class HttpErrorInterceptor implements HttpInterceptor {
     return next.handle(req).pipe(
       catchError((error: HttpErrorResponse) => {
         let errorMessage = '';
+         if (error.status === 0) {
+          errorMessage = 'Server is not reachable. Please check your connection or try again later.';
+          this.toastr.error(errorMessage);
+          return throwError(() => error);
+        }
         if (error.error?.message) {
           errorMessage = error.error.message;
 

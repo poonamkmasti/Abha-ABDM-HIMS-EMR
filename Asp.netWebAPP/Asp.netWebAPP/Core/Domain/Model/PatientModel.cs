@@ -19,6 +19,11 @@ namespace Asp.netWebAPP.Core.Domain.Model
         public string? EncryptedLinkToken { get; set; }  
         public DateTime? LinkTokenExpiry { get; set; } 
         public DateTime? CreatedOn { get; set; }
+        public int? CountrySubDivisionId { get; set; }
+        public int? CountryId { get; set; }
+        public string ShortName { get; set; }
+        public string Address { get; set; }
+
 
     }
 }

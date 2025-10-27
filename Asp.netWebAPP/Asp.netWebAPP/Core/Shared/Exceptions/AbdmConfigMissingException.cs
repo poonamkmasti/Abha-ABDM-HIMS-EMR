@@ -72,4 +72,8 @@
         public DatabaseAccessException(string message) : base(message) { }
         public DatabaseAccessException(string message, Exception innerException) : base(message, innerException) { }
     }
+    public class MultipleOTPRequest: Exception
+    {
+        public MultipleOTPRequest(string message) : base(message) { }
+    }
 }

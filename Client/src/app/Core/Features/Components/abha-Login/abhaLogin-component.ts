@@ -18,6 +18,7 @@ import { SearchPatientQuery } from '../../../Application/Abha/Queries/search-pat
 import { PatientSearchDTO } from '../../../Domain/Model/patinet-model';
 import { AbhaRegistration } from '../abha-registration/abha-registration';
 import { AbhaLoginApiService } from '../../../Infrastructure/Services/abhaLogin-api.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-abha',
@@ -47,6 +48,7 @@ export class ABHA {
   private searchPatientHandler:SearchPatientHandler;
 
   constructor(
+     private route: ActivatedRoute,
     private fb: FormBuilder,
     private apiService: AbhaLoginApiService, 
     private toastr: ToastrService, 
@@ -59,6 +61,15 @@ export class ABHA {
     this.otpHandler = new RequestOtpHandler(apiService);
     this.verifyHandler = new VerifyOtpHandler(apiService);
     this.searchPatientHandler = new SearchPatientHandler(patientService);
+  }
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      const mobileFromUrl = params['mobile'];
+      if (mobileFromUrl) {
+        this.Mobile.set(mobileFromUrl);
+        this.OnMobileInput(mobileFromUrl);  
+      }
+    });
   }
 OnMobileInput(value: string) {
   this.loginForm.get('mobile')?.setValue(value);
@@ -75,7 +86,8 @@ OnMobileInput(value: string) {
 OnSelectPatient(pat: any) {
   this.SelectedPatient.set(pat);
   setTimeout(() => {
-  window.location.href = "http://localhost:56326/Home/Index#/Appointment/Visit";
+window.location.href = "http://localhost:56326/Home/Index?redirectTo=Appointment/Visit";
+
 }, 200); 
 
 }
